@@ -1,18 +1,20 @@
-import express, { Request, Response } from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import quizRoutes from './routes/quizRoutes';
-import { GeminiService } from './services/geminiService';
+// Load environment variables first
+require('dotenv').config({ path: './.env' });
 
-dotenv.config();
+const express = require('express');
+const cors = require('cors');
+const quizRoutes = require('./routes/quizRoutes');
+const authRoutes = require('./routes/authRoutes');
+const { GeminiService } = require('./services/geminiService');
 
 const app = express();
-const PORT = 3001; // Force port 3001 to avoid AirTunes conflict
+const PORT = process.env.PORT || 3001; // Use environment variable or default to 3001
 
 // Ensure API key is available
-const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyDQKa18SxnU0lw3OhrtlReT2p5xVGVMfi8';
+const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  console.error('GEMINI_API_KEY is required');
+  console.error('GEMINI_API_KEY environment variable is required');
+  console.error('Please set GEMINI_API_KEY in your .env file');
   process.exit(1);
 }
 
@@ -30,6 +32,7 @@ app.get('/', (req, res) => {
 
 // API Routes
 app.use('/api/quiz', quizRoutes);
+app.use('/api/auth', authRoutes);
 
 // Start the server
 app.listen(PORT, () => {

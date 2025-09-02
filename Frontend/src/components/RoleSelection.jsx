@@ -1,12 +1,7 @@
 import React from 'react';
 import { Shield, Users, BookOpen, Settings } from 'lucide-react';
 
-interface RoleSelectionProps {
-  onRoleSelect: (role: 'admin' | 'user') => void;
-  userName: string;
-}
-
-export function RoleSelection({ onRoleSelect, userName }: RoleSelectionProps) {
+export function RoleSelection({ onRoleSelect, userName }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 flex items-center justify-center p-4">
       {/* Floating geometric shapes */}

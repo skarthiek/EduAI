@@ -1,11 +1,7 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, BookOpen } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, BookOpen, X, XCircle } from 'lucide-react';
 
-interface AuthFormProps {
-  onAuth: (name: string, email: string, password: string, isLogin: boolean) => void;
-}
-
-export function AuthForm({ onAuth }: AuthFormProps) {
+export function AuthForm({ onAuth, selectedRole }) {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
@@ -17,24 +13,102 @@ export function AuthForm({ onAuth }: AuthFormProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!isLogin && formData.password !== formData.confirmPassword) {
       alert('Passwords do not match');
       return;
     }
-    console.log('Form submitted:', formData); // Debug log
-    console.log('Calling onAuth with:', formData.name, formData.email, formData.password, isLogin); // Debug log
+
     setIsLoading(true);
-    // Simulate loading delay for better UX
-    setTimeout(() => {
+    setError('');
+    setFieldErrors({});
+
+    // Client-side validation
+    const errors = {};
+
+    if (!formData.email) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (!formData.password) {
+      errors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      errors.password = 'Password must be at least 6 characters long';
+    }
+
+    if (!isLogin) {
+      if (!formData.name) {
+        errors.name = 'Full name is required';
+      }
+      if (!formData.confirmPassword) {
+        errors.confirmPassword = 'Please confirm your password';
+      } else if (formData.password !== formData.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       setIsLoading(false);
-      onAuth(formData.name, formData.email, formData.password, isLogin);
-    }, 1500);
+      return;
+    }
+
+    try {
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
+      const payload = isLogin
+        ? { email: formData.email, password: formData.password }
+        : {
+            name: formData.name,
+            email: formData.email,
+            password: formData.password,
+            confirmPassword: formData.confirmPassword,
+            role: selectedRole
+          };
+
+      const response = await fetch(`http://localhost:3001${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Call the onAuth callback with the user data
+        onAuth(data.user);
+        setRetryCount(0); // Reset retry count on success
+      } else {
+        const errorMessage = data.error || 'Authentication failed';
+        setError(errorMessage);
+        console.error('Authentication failed:', errorMessage);
+      }
+    } catch (error) {
+      console.error('Authentication error:', error);
+
+      // Check if it's a network error
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        setError('Network error. Please check if the backend server is running and try again.');
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
+
+      setRetryCount(prev => prev + 1);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -70,12 +144,55 @@ export function AuthForm({ onAuth }: AuthFormProps) {
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2 animate-slide-in-left">QuizMaster</h1>
             <p className="text-gray-600 animate-slide-in-right">
-              {isLogin ? 'Test your knowledge, challenge your mind' : 'Start your quiz journey today'}
+              {selectedRole === 'admin'
+                ? (isLogin ? 'Admin login - Manage quizzes and users' : 'Create your admin account')
+                : (isLogin ? 'Test your knowledge, challenge your mind' : 'Start your quiz journey today')
+              }
             </p>
           </div>
 
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 animate-fade-in">
+              <div className="flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-red-700 font-medium text-sm">{error}</p>
+                  {retryCount > 0 && retryCount < 3 && (
+                    <p className="text-red-600 text-xs mt-1">
+                      Attempt {retryCount} of 3. Please check your connection and try again.
+                    </p>
+                  )}
+                  {retryCount >= 3 && (
+                    <p className="text-red-600 text-xs mt-1">
+                      Multiple attempts failed. Please contact support if the problem persists.
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setError('')}
+                  className="text-red-400 hover:text-red-600 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/20 backdrop-blur-sm rounded-3xl flex items-center justify-center z-10">
+              <div className="bg-white/90 rounded-2xl p-6 flex items-center gap-4 shadow-lg">
+                <div className="w-8 h-8 border-3 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                <p className="text-gray-700 font-medium">
+                  {isLogin ? 'Signing in...' : 'Creating account...'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in-delayed">
+          <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in-delayed relative z-0">
             {!isLogin && (
               <div className="animate-slide-down">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -89,9 +206,18 @@ export function AuthForm({ onAuth }: AuthFormProps) {
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="Enter your full name"
-                    className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-gray-50/50 hover:bg-white/80 focus:bg-white transform hover:scale-105 focus:scale-105"
+                    className={`w-full pl-12 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-gray-50/50 hover:bg-white/80 focus:bg-white transform hover:scale-105 focus:scale-105 ${
+                      fieldErrors.name ? 'border-red-300 bg-red-50/50' : 'border-gray-200'
+                    } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     required={!isLogin}
+                    disabled={isLoading}
                   />
+                  {fieldErrors.name && (
+                    <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                      <XCircle className="w-4 h-4" />
+                      {fieldErrors.name}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -108,9 +234,18 @@ export function AuthForm({ onAuth }: AuthFormProps) {
                   value={formData.email}
                   onChange={handleInputChange}
                   placeholder="Enter your email"
-                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-gray-50/50 hover:bg-white/80 focus:bg-white transform hover:scale-105 focus:scale-105"
+                  className={`w-full pl-12 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-gray-50/50 hover:bg-white/80 focus:bg-white transform hover:scale-105 focus:scale-105 ${
+                    fieldErrors.email ? 'border-red-300 bg-red-50/50' : 'border-gray-200'
+                  } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   required
+                  disabled={isLoading}
                 />
+                {fieldErrors.email && (
+                  <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                    <XCircle className="w-4 h-4" />
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -127,9 +262,18 @@ export function AuthForm({ onAuth }: AuthFormProps) {
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder={isLogin ? "Enter your password" : "Create a password"}
-                  className="w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-gray-50/50 hover:bg-white/80 focus:bg-white transform hover:scale-105 focus:scale-105"
+                  className={`w-full pl-12 pr-12 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-gray-50/50 hover:bg-white/80 focus:bg-white transform hover:scale-105 focus:scale-105 ${
+                    fieldErrors.password ? 'border-red-300 bg-red-50/50' : 'border-gray-200'
+                  } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   required
+                  disabled={isLoading}
                 />
+                {fieldErrors.password && (
+                  <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                    <XCircle className="w-4 h-4" />
+                    {fieldErrors.password}
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -154,9 +298,18 @@ export function AuthForm({ onAuth }: AuthFormProps) {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     placeholder="Confirm your password"
-                    className="w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-gray-50/50 hover:bg-white/80 focus:bg-white transform hover:scale-105 focus:scale-105"
+                    className={`w-full pl-12 pr-12 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-gray-50/50 hover:bg-white/80 focus:bg-white transform hover:scale-105 focus:scale-105 ${
+                      fieldErrors.confirmPassword ? 'border-red-300 bg-red-50/50' : 'border-gray-200'
+                    } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     required={!isLogin}
+                    disabled={isLoading}
                   />
+                  {fieldErrors.confirmPassword && (
+                    <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                      <XCircle className="w-4 h-4" />
+                      {fieldErrors.confirmPassword}
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}

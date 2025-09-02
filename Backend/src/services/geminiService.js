@@ -1,16 +1,13 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Question, QuizGenerationRequest } from '../types/quiz';
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+// Types are now defined as JSDoc comments in types/quiz.js
 
-export class GeminiService {
-  private genAI: GoogleGenerativeAI;
-  private model: any;
-
-  constructor(apiKey: string) {
+class GeminiService {
+  constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
     this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
   }
 
-  async generateQuiz(request: QuizGenerationRequest): Promise<any> {
+  async generateQuiz(request) {
     const prompt = `
       Generate a ${request.difficulty} level quiz about "${request.topic}" with ${request.numberOfQuestions} multiple-choice questions.
       The quiz should be in the category: ${request.category}.
@@ -65,12 +62,12 @@ export class GeminiService {
     }
   }
 
-  async generateQuestions(topic: string, difficulty: string, count: number): Promise<Question[]> {
+  async generateQuestions(topic, difficulty, count) {
     const prompt = `
       Generate ${count} ${difficulty} level multiple-choice questions about "${topic}".
       For each question, provide:
       - The question text
-      - 极 options (A, B, C, D)
+      - 4 options (A, B, C, D)
       - The correct answer (A, B, C, or D)
       - A brief explanation
       
@@ -87,7 +84,7 @@ export class GeminiService {
       
       // Remove markdown code blocks if present
       if (jsonText.includes('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\极?/g, '');
+        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
       } else if (jsonText.includes('```')) {
         jsonText = jsonText.replace(/```\n?/g, '');
       }
@@ -103,3 +100,5 @@ export class GeminiService {
     }
   }
 }
+
+module.exports = { GeminiService };

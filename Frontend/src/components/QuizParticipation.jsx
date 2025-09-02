@@ -1,20 +1,17 @@
 import React, { useState } from 'react';
 import { Play, ArrowRight, CheckCircle, XCircle } from 'lucide-react';
-import { Quiz, Question, QuizResult } from '../types/quiz';
+// Types are now defined as JSDoc comments in types/quiz.js
 
-interface QuizParticipationProps {
-  onBack: () => void;
-}
-
-export function QuizParticipation({ onBack }: QuizParticipationProps) {
+export function QuizParticipation({ onBack }) {
   const [quizCode, setQuizCode] = useState('');
-  const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
+  const [currentQuiz, setCurrentQuiz] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [quizResults, setQuizResults] = useState([]);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const fetchQuizByCode = async () => {
     if (!quizCode || quizCode.length !== 6) {
@@ -42,7 +39,7 @@ export function QuizParticipation({ onBack }: QuizParticipationProps) {
     }
   };
 
-  const handleAnswerSelect = (index: number) => {
+  const handleAnswerSelect = (index) => {
     setSelectedAnswer(index);
   };
 
@@ -53,25 +50,77 @@ export function QuizParticipation({ onBack }: QuizParticipationProps) {
     const isCorrect = selectedAnswer === ['A', 'B', 'C', 'D'].indexOf(currentQuestion.correctAnswer);
 
     // Save result
-    const result: QuizResult = {
+    const result = {
       questionId: currentQuestion.id,
-      selectedAnswer: selectedAnswer,
+      selectedAnswer: ['A', 'B', 'C', 'D'][selectedAnswer],
       isCorrect: isCorrect
     };
 
-    setQuizResults([...quizResults, result]);
+    const newQuizResults = [...quizResults, result];
+    setQuizResults(newQuizResults);
 
     // Move to next question or complete quiz
     if (currentQuestionIndex < currentQuiz.questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
       setSelectedAnswer(null);
     } else {
+      // Quiz completed - send results to backend
+      console.log('Quiz completed! Sending results to backend...');
+      sendQuizResults(newQuizResults);
       setQuizCompleted(true);
     }
   };
 
   const calculateScore = () => {
     return quizResults.filter(result => result.isCorrect).length;
+  };
+
+  const sendQuizResults = async (finalResults) => {
+    if (!currentQuiz || !finalResults || finalResults.length === 0) return;
+
+    const score = finalResults.filter(result => result.isCorrect).length;
+    const userId = `Anonymous_${Date.now()}`;
+
+    const resultData = {
+      quizId: currentQuiz.id,
+      userId: userId,
+      userName: 'Anonymous User',
+      score: score,
+      totalQuestions: currentQuiz.questions.length,
+      answers: finalResults,
+      completedAt: new Date()
+    };
+
+    try {
+      console.log('Sending quiz result from QuizParticipation:', {
+        quizId: resultData.quizId,
+        userId: resultData.userId,
+        score: resultData.score,
+        totalQuestions: resultData.totalQuestions,
+        answersCount: resultData.answers.length
+      });
+
+      const response = await fetch('http://localhost:3001/api/quiz/result', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(resultData),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log('Quiz result saved successfully with ID:', data.resultId);
+        setSubmitSuccess(true);
+        // Clear success message after 3 seconds
+        setTimeout(() => setSubmitSuccess(false), 3000);
+      } else {
+        console.error('Error saving quiz result:', data.error);
+      }
+    } catch (error) {
+      console.error('Error submitting quiz result:', error);
+    }
   };
 
   const resetQuiz = () => {
@@ -81,6 +130,7 @@ export function QuizParticipation({ onBack }: QuizParticipationProps) {
     setQuizResults([]);
     setQuizCompleted(false);
     setQuizCode('');
+    setSubmitSuccess(false);
   };
 
   if (!currentQuiz) {
@@ -141,6 +191,16 @@ export function QuizParticipation({ onBack }: QuizParticipationProps) {
           <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
             Quiz Completed!
           </h2>
+
+          {submitSuccess && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle className="w-5 h-5" />
+                <span className="font-medium">Results submitted successfully!</span>
+              </div>
+              <p className="text-sm text-green-600 mt-1">Your quiz results have been sent to the admin panel.</p>
+            </div>
+          )}
 
           <div className="text-center mb-6">
             <div className="text-4xl font-bold text-gray-800 mb-2">
